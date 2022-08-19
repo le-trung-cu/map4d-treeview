@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { v4 as uuid } from 'uuid'
-import { ExpandMore, ChevronRight, Folder, SearchOutlined, } from '@mui/icons-material'
+import { ExpandMore, ChevronRight, SearchOutlined, } from '@mui/icons-material'
 import { StyledInputBase, StyledSearchIconWrapper, StyledTreeItem, StyledTreeView, StyledSearchForm } from './styled'
 
 const initState = {
@@ -47,51 +47,24 @@ const initState = {
     ]
 }
 
-// const options = initState.treeView.fi
-
-function cloneTree(node) {
-    if(node === null) return
-    const newNode = {id: node.id, name: node.name}
-    if(Array.isArray(node.children)){
-        newNode.children = node.children.map(item => cloneTree(item))
-    }
-    return newNode;
-}
-
 export const DataClassList = () => {
     const [treeView, setTreeView] = useState(initState.treeView)
     const [selectedClasses, setSelectedClasses] = useState(new Set())
     const [searchTreeView, setSearchTreeView] = useState({ search: '', items: initState.treeView })
 
-    const selectables = useMemo(() => {
-        const result = []
-        const stack = [...treeView]
-        while (stack.length > 0) {
-            const current = stack.pop()
-            if (Array.isArray(current.children)) {
-                stack.push(...current.children)
-            } else {
-                result.push({ id: current.id, name: current.name })
-            }
-        }
-        return result.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
-
-    }, [treeView])
-
     useEffect(() => {
-        const newTree = cloneTree({id: 'root', name: 'root', children: treeView})
-        // console.log(newTree)
         if (searchTreeView.search.length === 0) return
-        // const result = selectables.filter(item => item.name.toLowerCase().search(searchTreeView.search.toLowerCase()) >= 0)
-        const stack = [...newTree.children]
+        const stack = [...treeView]
         const visitedTracker = new Map()
         const searchResult = []
         const mapIdToObject = new Map()
+
+        // search by name
         while (stack.length > 0) {
             const current = { ...stack.pop() }
             mapIdToObject.set(current.id, { id: current.id, name: current.name })
             if (current.name.toLowerCase().search(searchTreeView.search.toLowerCase()) >= 0) {
-                searchResult.push({ ...current })
+                searchResult.push(current)
             } else if (Array.isArray(current.children)) {
                 stack.push(...current.children)
                 for (let index = 0; index < current.children.length; index++) {
@@ -101,12 +74,7 @@ export const DataClassList = () => {
         }
 
         // build search result tree
-        const searchResultTree = {
-            id: 'root',
-            name: 'root',
-            children: [],
-        }
-
+        const searchResultTree = []
         for (let index = 0; index < searchResult.length; index++) {
             let parent = mapIdToObject.get(visitedTracker.get(searchResult[index].id)) || null
             let child = searchResult[index]
@@ -123,13 +91,12 @@ export const DataClassList = () => {
                 parent = mapIdToObject.get(visitedTracker.get(parent.id)) || null
             }
             if (currentTree) {
-                if (searchResultTree.children.every(item => item.id !== currentTree.id)) {
-                    searchResultTree.children.push(currentTree)
+                if (searchResultTree.every(item => item.id !== currentTree.id)) {
+                    searchResultTree.push(currentTree)
                 }
             }
         }
-        // console.log(searchResult);
-        setSearchTreeView((current) => ({ search: current.search, items: searchResultTree.children }))
+        setSearchTreeView((current) => ({ search: current.search, items: searchResultTree }))
     }, [searchTreeView.search, treeView])
 
     const renderTree = (nodes) => (

@@ -1,7 +1,7 @@
 import Map4dMap from './Map4dMap'
 import { Box, Toolbar, AppBar as MuiAppBar, IconButton, Drawer, Typography, ThemeProvider, Divider } from '@mui/material'
 import { Menu as MenuIcon } from '@mui/icons-material'
-import { styled, useTheme } from '@mui/material/styles'
+import { styled } from '@mui/material/styles'
 import { useState } from 'react'
 import { DataClassList } from './components/data-class-list/DataClassList'
 import { theme } from './theme'
@@ -89,7 +89,7 @@ function App() {
           <DataClassList />
         </Drawer>
         <Box sx={{marginLeft: open? drawerWidth+10+'px' : 0,}}>
-          {/* <Map4dMap
+          <Map4dMap
             key="map4d"
             id="map4d"
             onMapReady={onMapReady}
@@ -98,7 +98,7 @@ function App() {
               zoom: 15
             }}
             accessKey="b77745a2eb604d0989e2b5648d0019b2"
-            version="2.1" /> */}
+            version="2.1" />
         </Box>
 
       </Box>
