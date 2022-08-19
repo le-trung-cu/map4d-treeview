@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuid } from 'uuid'
-import { Box, InputBase, Autocomplete, TextField } from '@mui/material'
-import { TreeItem, TreeView } from '@mui/lab'
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import { ExpandMore, ChevronRight, Folder, SearchOutlined, } from '@mui/icons-material'
 import { StyledInputBase, StyledSearchIconWrapper, StyledTreeItem, StyledTreeView, StyledSearchForm } from './styled'
 
@@ -52,6 +49,15 @@ const initState = {
 
 // const options = initState.treeView.fi
 
+function cloneTree(node) {
+    if(node === null) return
+    const newNode = {id: node.id, name: node.name}
+    if(Array.isArray(node.children)){
+        newNode.children = node.children.map(item => cloneTree(item))
+    }
+    return newNode;
+}
+
 export const DataClassList = () => {
     const [treeView, setTreeView] = useState(initState.treeView)
     const [selectedClasses, setSelectedClasses] = useState(new Set())
@@ -73,9 +79,58 @@ export const DataClassList = () => {
     }, [treeView])
 
     useEffect(() => {
-        const result = selectables.filter(item => item.name.toLowerCase().search(searchTreeView.search.toLowerCase()) >= 0)
-        setSearchTreeView((current) => ({ ...current, items: result }))
-    }, [searchTreeView.search, selectables])
+        const newTree = cloneTree({id: 'root', name: 'root', children: treeView})
+        // console.log(newTree)
+        if (searchTreeView.search.length === 0) return
+        // const result = selectables.filter(item => item.name.toLowerCase().search(searchTreeView.search.toLowerCase()) >= 0)
+        const stack = [...newTree.children]
+        const visitedTracker = new Map()
+        const searchResult = []
+        const mapIdToObject = new Map()
+        while (stack.length > 0) {
+            const current = { ...stack.pop() }
+            mapIdToObject.set(current.id, { id: current.id, name: current.name })
+            if (current.name.toLowerCase().search(searchTreeView.search.toLowerCase()) >= 0) {
+                searchResult.push({ ...current })
+            } else if (Array.isArray(current.children)) {
+                stack.push(...current.children)
+                for (let index = 0; index < current.children.length; index++) {
+                    visitedTracker.set(current.children[index].id, current.id)
+                };
+            }
+        }
+
+        // build search result tree
+        const searchResultTree = {
+            id: 'root',
+            name: 'root',
+            children: [],
+        }
+
+        for (let index = 0; index < searchResult.length; index++) {
+            let parent = mapIdToObject.get(visitedTracker.get(searchResult[index].id)) || null
+            let child = searchResult[index]
+            let currentTree = child
+            while (parent != null) {
+                const p = child
+                if (parent.children && parent.children.every(item => item.id !== p.id)) {
+                    parent.children.push(child)
+                } else {
+                    parent.children = [child]
+                }
+                child = parent
+                currentTree = parent
+                parent = mapIdToObject.get(visitedTracker.get(parent.id)) || null
+            }
+            if (currentTree) {
+                if (searchResultTree.children.every(item => item.id !== currentTree.id)) {
+                    searchResultTree.children.push(currentTree)
+                }
+            }
+        }
+        // console.log(searchResult);
+        setSearchTreeView((current) => ({ search: current.search, items: searchResultTree.children }))
+    }, [searchTreeView.search, treeView])
 
     const renderTree = (nodes) => (
         <StyledTreeItem key={nodes.id} nodeId={nodes.id}
