@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { v4 as uuid } from 'uuid'
-import { ExpandMore, ChevronRight, SearchOutlined, } from '@mui/icons-material'
-import { StyledInputBase, StyledSearchIconWrapper, StyledTreeItem, StyledTreeView, StyledSearchForm } from './styled'
+import { SearchOutlined, Folder, } from '@mui/icons-material'
+import { StyledInputBase, StyledSearchIconWrapper, StyledSearchForm, StyledTreeView } from './styled'
+import { TreeItem } from '../tree-view/TreeView'
+import { Checkbox, Divider, Typography } from '@mui/material'
+import { Stack } from '@mui/system'
 
 const initState = {
     treeView: [
@@ -49,7 +52,7 @@ const initState = {
 
 export const DataClassList = () => {
     const [treeView, setTreeView] = useState(initState.treeView)
-    const [selectedClasses, setSelectedClasses] = useState(new Set())
+    const selectedClasses = useRef(new Set())
     const [searchTreeView, setSearchTreeView] = useState({ search: '', items: initState.treeView })
 
     useEffect(() => {
@@ -99,32 +102,47 @@ export const DataClassList = () => {
         setSearchTreeView((current) => ({ search: current.search, items: searchResultTree }))
     }, [searchTreeView.search, treeView])
 
-    const renderTree = (nodes) => (
-        <StyledTreeItem key={nodes.id} nodeId={nodes.id}
-            folder={Array.isArray(nodes.children)}
-            selectable={!Array.isArray(nodes.children)}
-            labelText={!Array.isArray(nodes.children) ? nodes.name : `${nodes.name} (${nodes.children.length})`}
-            labelIcon={nodes?.icon}
-            id={nodes.id}
-            selected={selectedClasses.has(nodes.id)}
-            onChange={(e, value) => {
-                const classes = new Set(selectedClasses)
-                if (value) {
-                    if (value.checked) {
-                        classes.add(value.id)
-                    } else {
-                        classes.delete(value.id)
-                    }
-                    console.log(classes);
-                    setSelectedClasses(classes)
-                }
-            }}
-        >
-            {Array.isArray(nodes.children)
-                ? nodes.children.map((node) => renderTree(node))
-                : null}
-        </StyledTreeItem>
-    );
+    const renderFolderTreeItem = (node) => (
+        <Stack direction='row' alignItems='center' height={40}>
+            <Folder fontSize='small' color='secondary' sx={{mr: 1}} />
+            <Typography variant='caption'>{node.name}</Typography>
+        </Stack>
+    )
+
+    const renderSelectableTreeItem = (node) => (
+        <Stack direction='row' alignItems='center'>
+            {<Checkbox
+                size='small'
+                checked={selectedClasses.current.has(node.id)}
+                onChange={(_, checked) => {
+                    if (checked)
+                        selectedClasses.current.add(node.id)
+                    else
+                        selectedClasses.current.delete(node.id)
+                    console.log(selectedClasses);
+                }} />}
+            <Typography variant='caption'>{node.name}</Typography>
+        </Stack>
+    )
+
+    const renderTree = (node) => {
+        const render = Array.isArray(node.children)
+            ? renderFolderTreeItem
+            : renderSelectableTreeItem
+
+        return (
+            <TreeItem
+                key={node.id}
+                nodeId={node.id}
+                node={node}
+                render={render}
+            >
+                {Array.isArray(node.children)
+                    ? node.children.map((item) => renderTree(item))
+                    : null}
+            </TreeItem>)
+    }
+
     return (
         <>
             <StyledSearchForm>
@@ -136,15 +154,16 @@ export const DataClassList = () => {
                 </StyledSearchIconWrapper>
             </StyledSearchForm>
             <StyledTreeView
-                aria-label="rich object"
-                defaultCollapseIcon={<ExpandMore />}
-                defaultExpandIcon={<ChevronRight />}
                 sx={{ paddingX: 1, flexGrow: 1, flexBasis: 0, flexShrink: 1, maxWidth: 500, overflowY: 'auto' }}
             >
                 {(searchTreeView.search.length > 0
                     ? searchTreeView.items
                     : treeView)
-                    .map(root => renderTree(root))}
+                    .map(root => (
+                        <div key={root.id}>
+                            {renderTree(root)}
+                            <Divider />
+                        </div>))}
             </StyledTreeView>
         </>
     )
