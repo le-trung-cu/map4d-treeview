@@ -59,7 +59,7 @@ export const DataClassList = () => {
         if (searchTreeView.search.length === 0) return
         const stack = [...treeView]
         const visitedTracker = new Map()
-        const searchResult = []
+        let searchResult = []
         const mapIdToObject = new Map()
 
         // search by name
@@ -77,6 +77,8 @@ export const DataClassList = () => {
         }
 
         // build search result tree
+        // reverse searchResult array is needed to maintain order for nodes
+        searchResult = searchResult.reverse()
         const searchResultTree = []
         for (let index = 0; index < searchResult.length; index++) {
             let parent = mapIdToObject.get(visitedTracker.get(searchResult[index].id)) || null
