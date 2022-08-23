@@ -52,7 +52,7 @@ import { menuData } from '../../data/menu'
 // }
 
 function fetchMenuData() {
-    return  menuData.map(item => ({...item}))
+    return menuData.map(item => ({ ...item }))
 }
 
 function buildTreeViewState(menuData) {
@@ -172,6 +172,7 @@ export const DataClassList = () => {
         <Stack direction='row' alignItems='center'>
             {<Checkbox
                 size='small'
+                sx={{ml: '-9px'}}
                 checked={selectedClasses.current.has(node.id)}
                 onChange={(_, checked) => {
                     if (checked)
@@ -190,17 +191,15 @@ export const DataClassList = () => {
             ? renderFolderTreeItem
             : renderSelectableTreeItem
 
-        return (
-            <TreeItem
-                key={node.id}
-                nodeId={node.id}
-                node={node}
-                render={render}
-            >
-                {Array.isArray(node.children)
-                    ? node.children.map((item) => renderTree(item))
-                    : null}
-            </TreeItem>)
+        return <TreeItem
+            key={node.id}
+            nodeId={node.id}
+            node={node}
+            render={render}
+            renderChildren={Array.isArray(node.children)
+                ? () => node.children.map((item) => renderTree(item))
+                : () => null}
+        />
     }
 
     return (

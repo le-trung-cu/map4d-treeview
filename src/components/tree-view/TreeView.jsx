@@ -24,9 +24,10 @@ export const TreeView = ({ children, ...props }) => {
     )
 }
 
-export const TreeItem = ({ nodeId, node, children, render, ...props }) => {
+export const TreeItem = ({ nodeId, node, render, renderChildren, ...props }) => {
     const context = useContext(TreeViewContext)
     const open = context.getMetaNode(nodeId)?.open
+    const [collapseIn, setCollapseIn] = useState(false)
 
     useEffect(() => {
         if (open === undefined) {
@@ -34,13 +35,24 @@ export const TreeItem = ({ nodeId, node, children, render, ...props }) => {
         }
     }, [])
 
+    useEffect(() => {
+        const id = setTimeout(setCollapseIn(open), 500)
+        return () => clearTimeout(id)
+    }, [open])
+
     function toggleColapse() {
-        const open = context.getMetaNode(nodeId)?.open || false
-        context.setMetaNode(nodeId, { open: !open })
+        let id = null
+        if(open){
+            setCollapseIn(false)
+            id = setTimeout(() =>  context.setMetaNode(nodeId, { open: !open }), 300)
+        }else {
+            context.setMetaNode(nodeId, { open: !open })
+           id = setTimeout(() =>  setCollapseIn(true), 500)
+        }  
     }
-    let PreIcon = children && open
+    let PreIcon = Array.isArray(node.children) && open
         ? <ExpandMore fontSize='small'/>
-        : children
+        : Array.isArray(node.children)
             ? <ChevronRight fontSize='small'/>
             : null
 
@@ -53,8 +65,8 @@ export const TreeItem = ({ nodeId, node, children, render, ...props }) => {
                 </Box>
                 {render(node)}
             </Stack>
-            <Collapse sx={{ paddingLeft: 2 }} in={context.getMetaNode(nodeId)?.open}>
-                {children}
+            <Collapse sx={{ paddingLeft: 2 }} in={collapseIn}>
+                {open && renderChildren(open)}
             </Collapse>
         </Box>
     )
