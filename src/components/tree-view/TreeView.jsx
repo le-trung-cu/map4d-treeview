@@ -46,8 +46,11 @@ export const TreeItem = ({ nodeId, node, children, render, ...props }) => {
 
     return (
         <Box {...props}>
-            <Stack direction='row' alignItems='center' onClick={toggleColapse} sx={{cursor: 'pointer'}}>
-                {PreIcon}
+            <Stack position='relative' direction='row' alignItems='center' onClick={toggleColapse} 
+            sx={{cursor: 'pointer', paddingLeft: 1}}>
+                <Box position='absolute' left={-12}>
+                    {PreIcon}
+                </Box>
                 {render(node)}
             </Stack>
             <Collapse sx={{ paddingLeft: 2 }} in={context.getMetaNode(nodeId)?.open}>
