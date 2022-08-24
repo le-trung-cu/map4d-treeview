@@ -1,5 +1,5 @@
 import Map4dMap from './Map4dMap'
-import { Box, Toolbar, AppBar as MuiAppBar, IconButton, Drawer, Typography, ThemeProvider, Divider, ToggleButtonGroup, ToggleButton, Slide } from '@mui/material'
+import { Box, Toolbar, AppBar as MuiAppBar, IconButton, Drawer, Typography, ThemeProvider, Divider, ToggleButtonGroup, ToggleButton, Slide, Tooltip } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu';
 import RemoveRedEyeRoundedIcon from '@mui/icons-material/RemoveRedEyeRounded';
 import NearMeRoundedIcon from '@mui/icons-material/NearMeRounded';
@@ -54,6 +54,25 @@ const DrawerHeader = styled('div')(({ theme }) => ({
   letterSpacing: 0,
 }));
 
+function getMidpoint(path = [{ lat: 0, lng: 0 }]) {
+  const measure = new window.map4d.Measure(path)
+  const length = measure.length / 2
+  let cumulativeLength = 0
+  let segmentLength = 0
+  let index = 0
+
+  while (cumulativeLength + segmentLength < length) {
+    cumulativeLength += segmentLength
+    measure.setPath([path[index], path[++index]])
+    segmentLength = measure.length
+  }
+  const p1 = path[index - 1]
+  const p2 = path[index]
+  measure.setPath([p1, p2])
+  const t = (length - cumulativeLength) / measure.length
+  console.log(t);
+  return { lat: p1.lat + (p2.lat - p1.lat) * t, lng: p1.lng + (p2.lng - p1.lng) * t }
+}
 
 function App() {
   const [open, setOpen] = useState(true)
@@ -86,9 +105,10 @@ function App() {
   }
 
   function subscribeGetLengthOfPolyline() {
+    const measure = new window.map4d.Measure([])
     let mouseMoveEvent = null
     let dblClickEvent = null
-
+    const savedObjects = []
     const dataForDrawPolyline = {
       points: [],
       circles: [],
@@ -98,9 +118,37 @@ function App() {
         strokeOpacity: 0.6,
       }),
       line: null,
+      markerForLengthOfLine: null,
+      // listMarkerForLengthOfPolyline: [],
+      markerForTotalLengthOfPolyline: null
     }
-    dataForDrawPolyline.polyline.setMap(map)
     const event = map.addListener('click', e => {
+
+      dataForDrawPolyline.points.push(e.location)
+
+      // create new marker for a new straight line segment
+      if (dataForDrawPolyline.points.length > 1) {
+        dataForDrawPolyline.polyline.setMap(map)
+        if (dataForDrawPolyline.markerForLengthOfLine) {
+          // dataForDrawPolyline.listMarkerForLengthOfPolyline.push(dataForDrawPolyline.markerForLengthOfLine)
+          dataForDrawPolyline.markerForLengthOfLine.setMap(null)
+        }
+        // update polyline 
+        dataForDrawPolyline.polyline.setPath(dataForDrawPolyline.points)
+
+
+        measure.setPath(dataForDrawPolyline.points)
+        let length = Math.round(measure.length * 100) / 100
+        const mid = getMidpoint(dataForDrawPolyline.points)
+        dataForDrawPolyline.markerForTotalLengthOfPolyline?.setMap(null)
+        dataForDrawPolyline.markerForTotalLengthOfPolyline = new window.map4d.Marker({
+          position: mid,
+          iconView: `<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${length} m</span>`,
+        })
+        dataForDrawPolyline.markerForTotalLengthOfPolyline.setMap(map)
+
+      }
+      // clear old line from map and create new line when mouse move
       dataForDrawPolyline.line?.setMap(null)
       dataForDrawPolyline.line = new window.map4d.Polyline({
         path: [],
@@ -108,18 +156,10 @@ function App() {
         strokeOpacity: 0.4,
       })
       dataForDrawPolyline.line.setMap(map)
+
       dataForDrawPolyline.circles.forEach(circle => {
         circle.setMap(null)
       })
-
-      if (dataForDrawPolyline.points.length === 0) {
-        dataForDrawPolyline.polyline.setMap(null)
-      } else {
-        dataForDrawPolyline.polyline.setMap(map)
-      }
-
-      dataForDrawPolyline.points.push(e.location)
-      dataForDrawPolyline.polyline.setPath(dataForDrawPolyline.points)
 
       // draw point
       dataForDrawPolyline.circles = []
@@ -143,33 +183,66 @@ function App() {
 
       if (mouseMoveEvent === null) {
         mouseMoveEvent = map.addListener('mouseMove', e => {
-          dataForDrawPolyline.line.setPath([dataForDrawPolyline.points[dataForDrawPolyline.points.length - 1], e.location])
+          const endPoint = dataForDrawPolyline.points[dataForDrawPolyline.points.length - 1]
+          dataForDrawPolyline.line.setPath([endPoint, e.location])
+          const center = {
+            lat: (endPoint.lat + e.location.lat) / 2,
+            lng: (endPoint.lng + e.location.lng) / 2
+          }
+
+          measure.setPath([endPoint, e.location])
+          let length = Math.round(measure.length * 100) / 100
+          dataForDrawPolyline.markerForLengthOfLine?.setMap(null)
+          dataForDrawPolyline.markerForLengthOfLine = new window.map4d.Marker({
+            position: center,
+            iconView: `<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${length} m</span>`,
+            label: measure.length + 'm'
+          })
+          dataForDrawPolyline.markerForLengthOfLine.setMap(map)
+
+          measure.setPath([...dataForDrawPolyline.points, e.location])
+          setLengthOfPolyline(Math.round(measure.length * 100) / 100)
         })
         dataForDrawPolyline.line.setMap(map)
       }
       if (dblClickEvent === null) {
+
         dblClickEvent = map.addListener('dblClick', e => {
           mouseMoveEvent?.remove()
-          dataForDrawPolyline.line.setPath([])
-          dataForDrawPolyline.line.setVisible(false)
           mouseMoveEvent = null
+          dataForDrawPolyline.line.setPath([])
+
           dataForDrawPolyline.polyline.setPath(dataForDrawPolyline.points)
+          savedObjects.push(dataForDrawPolyline.polyline)
+          savedObjects.push(...dataForDrawPolyline.circles)
+          savedObjects.push(dataForDrawPolyline.markerForTotalLengthOfPolyline)
+          // savedObjects.push(...dataForDrawPolyline.listMarkerForLengthOfPolyline)
+          dataForDrawPolyline.polyline = new window.map4d.Polyline({
+            path: [],
+            strokeWidth: 2,
+            strokeOpacity: 0.6,
+          })
+          dataForDrawPolyline.circles = []
+          dataForDrawPolyline.markerForLengthOfLine = null
+          // dataForDrawPolyline.listMarkerForLengthOfPolyline = []
+          dataForDrawPolyline.markerForLengthOfLine = null
           dataForDrawPolyline.points = []
         }, mapEventOptions)
       }
 
-      let measure = new window.map4d.Measure([])
       measure.setPath(dataForDrawPolyline.points)
       setLengthOfPolyline(Math.round(measure.length * 100) / 100)
     }, mapEventOptions)
 
     return () => {
+      console.log(savedObjects);
       event.remove()
       mouseMoveEvent?.remove()
       dblClickEvent?.remove()
       dataForDrawPolyline.line?.setMap(null)
       dataForDrawPolyline.polyline?.setMap(null)
       dataForDrawPolyline.circles?.forEach(circle => circle.setMap(null))
+      savedObjects.forEach(object => object.setMap(null))
     }
   }
 
@@ -259,7 +332,6 @@ function App() {
     if (selectedAction === 4)
       return subscribeGetAreaOfPolygon()
 
-    // return subscribeGetLengthOfPolylineHasPading()
   }, [map, selectedAction])
 
   const onMapReady = (map, id) => {
@@ -296,8 +368,14 @@ function App() {
               exclusive
               onChange={(e, action) => { setSelectedAction(action) }}>
               <ToggleButton value={1}><RemoveRedEyeRoundedIcon /></ToggleButton>
-              <ToggleButton value={2}><NearMeRoundedIcon /></ToggleButton>
-              <ToggleButton value={3}><DesignServicesRoundedIcon /></ToggleButton>
+              <ToggleButton value={2}>
+                <NearMeRoundedIcon />
+              </ToggleButton>
+              <ToggleButton value={3}>
+                <Tooltip title='Đo khoảng cách' arrow>
+                  <DesignServicesRoundedIcon />
+                </Tooltip>
+              </ToggleButton>
               <ToggleButton value={4}><SelectAllRoundedIcon /></ToggleButton>
             </ToggleButtonGroup>
           </Toolbar>
