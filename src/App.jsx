@@ -57,6 +57,7 @@ const DrawerHeader = styled('div')(({ theme }) => ({
 function getMidpoint(path = [{ lat: 0, lng: 0 }]) {
   const measure = new window.map4d.Measure(path)
   const length = measure.length / 2
+  if (length === 0) return path[0]
   let cumulativeLength = 0
   let segmentLength = 0
   let index = 0
@@ -70,12 +71,11 @@ function getMidpoint(path = [{ lat: 0, lng: 0 }]) {
   const p2 = path[index]
   measure.setPath([p1, p2])
   const t = (length - cumulativeLength) / measure.length
-  console.log(t);
   return { lat: p1.lat + (p2.lat - p1.lat) * t, lng: p1.lng + (p2.lng - p1.lng) * t }
 }
 
 function App() {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
 
   const [selectedAction, setSelectedAction] = useState(null)
   const [map, setMap] = useState(null)
@@ -119,18 +119,19 @@ function App() {
       }),
       line: null,
       markerForLengthOfLine: null,
-      // listMarkerForLengthOfPolyline: [],
-      markerForTotalLengthOfPolyline: null
+      markerForTotalLengthOfPolyline: null,
+      isDraggingCircle: false,
+      draggingCircle: null,
     }
     const event = map.addListener('click', e => {
 
+      console.log('click event handle for draw polyline', e)
       dataForDrawPolyline.points.push(e.location)
 
       // create new marker for a new straight line segment
       if (dataForDrawPolyline.points.length > 1) {
         dataForDrawPolyline.polyline.setMap(map)
         if (dataForDrawPolyline.markerForLengthOfLine) {
-          // dataForDrawPolyline.listMarkerForLengthOfPolyline.push(dataForDrawPolyline.markerForLengthOfLine)
           dataForDrawPolyline.markerForLengthOfLine.setMap(null)
         }
         // update polyline 
@@ -153,7 +154,8 @@ function App() {
       dataForDrawPolyline.line = new window.map4d.Polyline({
         path: [],
         strokeWidth: 1,
-        strokeOpacity: 0.4,
+        strokeColor: '#ffcc00',
+        strokeOpacity: 1,
       })
       dataForDrawPolyline.line.setMap(map)
 
@@ -166,23 +168,21 @@ function App() {
       dataForDrawPolyline.points.forEach(point => {
         const circle = new window.map4d.Circle({
           center: point,
-          radius: 0.001,
-          strokeWidth: 6,
+          radius: 1,
+          fillColor: '#3085d6',
+          strokeWidth: 2,
           strokeColor: '#FF0000',
         })
-        const circleTop = new window.map4d.Circle({
-          center: point,
-          radius: 0.001,
-          strokeWidth: 4,
-          strokeColor: '#1da1f2',
-        })
         circle.setMap(map)
-        circleTop.setMap(map)
-        dataForDrawPolyline.circles.push(circle, circleTop)
+        dataForDrawPolyline.circles.push(circle)
       })
 
       if (mouseMoveEvent === null) {
         mouseMoveEvent = map.addListener('mouseMove', e => {
+          if (dataForDrawPolyline.isDraggingCircle) {
+            return
+          }
+          console.log('mouseMove event handle for draw polyline...');
           const endPoint = dataForDrawPolyline.points[dataForDrawPolyline.points.length - 1]
           dataForDrawPolyline.line.setPath([endPoint, e.location])
           const center = {
@@ -208,23 +208,34 @@ function App() {
       if (dblClickEvent === null) {
 
         dblClickEvent = map.addListener('dblClick', e => {
+          // click + click = dblClick so we need to remove end element of array
+          dataForDrawPolyline.points.pop()
+          dataForDrawPolyline.circles.pop()?.setMap(null)
+
           mouseMoveEvent?.remove()
           mouseMoveEvent = null
-          dataForDrawPolyline.line.setPath([])
-
+          if (dataForDrawPolyline.points.length < 2) {
+            return
+          }
           dataForDrawPolyline.polyline.setPath(dataForDrawPolyline.points)
           savedObjects.push(dataForDrawPolyline.polyline)
           savedObjects.push(...dataForDrawPolyline.circles)
           savedObjects.push(dataForDrawPolyline.markerForTotalLengthOfPolyline)
-          // savedObjects.push(...dataForDrawPolyline.listMarkerForLengthOfPolyline)
+
+          // set relationship
+          dataForDrawPolyline.circles.forEach(circle => {
+            circle.belongTo = dataForDrawPolyline.polyline
+          })
+          dataForDrawPolyline.polyline.hasManyCircles = dataForDrawPolyline.circles
+          dataForDrawPolyline.polyline.markerForTotalLength = dataForDrawPolyline.markerForTotalLengthOfPolyline
+
           dataForDrawPolyline.polyline = new window.map4d.Polyline({
             path: [],
             strokeWidth: 2,
             strokeOpacity: 0.6,
           })
           dataForDrawPolyline.circles = []
-          dataForDrawPolyline.markerForLengthOfLine = null
-          // dataForDrawPolyline.listMarkerForLengthOfPolyline = []
+          dataForDrawPolyline.markerForTotalLengthOfPolyline = null
           dataForDrawPolyline.markerForLengthOfLine = null
           dataForDrawPolyline.points = []
         }, mapEventOptions)
@@ -232,11 +243,50 @@ function App() {
 
       measure.setPath(dataForDrawPolyline.points)
       setLengthOfPolyline(Math.round(measure.length * 100) / 100)
+
+
     }, mapEventOptions)
 
+    // dragg circle to modify polyline
+    const longClickEvent = map.addListener('longClick', e => {
+      console.log('longClick event handle for dragging circle...');
+      dataForDrawPolyline.isDraggingCircle = true
+      dataForDrawPolyline.draggingCircle = e.circle
+      e.circle.setFillColor('#ffcc00')
+    }, mapEventOptions)
+
+    const draggEvent = map.addListener('drag', e => {
+      if (dataForDrawPolyline.isDraggingCircle) {
+        map.setScrollGesturesEnabled(false)
+        const circle = dataForDrawPolyline.draggingCircle
+        const polyline = circle.belongTo
+        const path = polyline.getPath()
+        const index = polyline.hasManyCircles.findIndex(_circle => _circle === circle)
+        circle.setCenter(e.location)
+        path[index] = e.location
+        polyline.setPath(path)
+
+        measure.setPath(path)
+        let length = Math.round(measure.length * 100) / 100
+        const marker = polyline.markerForTotalLength
+        marker.setPosition(getMidpoint(path))
+        marker.setIconView(`<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${length} m</span>`)
+      }
+    }, {})
+
+    const draggEndEvent = map.addListener('dragEnd', e => {
+      if (dataForDrawPolyline.isDraggingCircle) {
+        dataForDrawPolyline.draggingCircle.setFillColor('#3085d6')
+        dataForDrawPolyline.isDraggingCircle = false
+        dataForDrawPolyline.draggingCircle = null
+        map.setScrollGesturesEnabled(true)
+      }
+    })
     return () => {
-      console.log(savedObjects);
       event.remove()
+      longClickEvent.remove()
+      draggEndEvent.remove()
+      draggEvent?.remove()
       mouseMoveEvent?.remove()
       dblClickEvent?.remove()
       dataForDrawPolyline.line?.setMap(null)
@@ -251,6 +301,7 @@ function App() {
     let dblClickEvent = null
 
     const measure = new window.map4d.Measure([])
+    const savedObjects = []
 
     const dataForDrawPolygon = {
       points: [],
@@ -260,6 +311,9 @@ function App() {
         userInteractionEnabled: true,
         paths: [[]]
       }),
+      markerForAreaOfPolygon: null,
+      isDraggingCircle: false,
+      draggingCircle: null,
     }
 
     const event = map.addListener('click', e => {
@@ -293,33 +347,111 @@ function App() {
           const points = dataForDrawPolygon.points.concat(e.location, dataForDrawPolygon.points[0])
 
           dataForDrawPolygon.polygon.setPaths([points])
-          measure.setPath(points)
-          setAreaOfPolygon(Math.round(measure.area * 100) / 100)
+          if (points.length > 3) {
+            measure.setPath(points)
+            const area = Math.round(measure.area * 100) / 100
+            const center = measure.center
+
+            dataForDrawPolygon.markerForAreaOfPolygon?.setMap(null)
+            dataForDrawPolygon.markerForAreaOfPolygon = new window.map4d.Marker({
+              position: center,
+              anchor: [0, 0],
+              iconView: `<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${area} m2</span>`,
+            })
+            dataForDrawPolygon.markerForAreaOfPolygon.setMap(map)
+          }
         })
       }
 
       if (dblClickEvent === null) {
         dblClickEvent = map.addListener('dblClick', e => {
+          dataForDrawPolygon.points.pop()
+          dataForDrawPolygon.circles.pop()?.setMap(null)
+
           mouseMoveEvent.remove()
           dblClickEvent.remove()
           mouseMoveEvent = null
           dblClickEvent = null
-          const points = dataForDrawPolygon.points.concat(e.location, dataForDrawPolygon.points[0])
+          const points = dataForDrawPolygon.points.concat(dataForDrawPolygon.points[0])
           dataForDrawPolygon.polygon.setPaths([points])
           dataForDrawPolygon.points = []
           measure.setPath(points)
           setAreaOfPolygon(Math.round(measure.area * 100) / 100)
+
+          console.log(dataForDrawPolygon.polygon.getPaths());
+
+          savedObjects.push(dataForDrawPolygon.polygon)
+          savedObjects.push(...dataForDrawPolygon.circles)
+          savedObjects.push(dataForDrawPolygon.markerForAreaOfPolygon)
+
+          // save relationship objects
+          dataForDrawPolygon.polygon.hasManyCircles = dataForDrawPolygon.circles
+          dataForDrawPolygon.circles.forEach(circle => circle.belongTo = dataForDrawPolygon.polygon)
+          dataForDrawPolygon.polygon.markerForArea = dataForDrawPolygon.markerForAreaOfPolygon
+
+          dataForDrawPolygon.polygon = new window.map4d.Polygon({
+            fillOpacity: 0.1,
+            userInteractionEnabled: true,
+            paths: [[]]
+          })
+          dataForDrawPolygon.circles = []
+          dataForDrawPolygon.markerForAreaOfPolygon = null
         }, mapEventOptions)
       }
 
     }, mapEventOptions)
 
+
+    // dragg circle to modify polygon
+    const longClickEvent = map.addListener('longClick', e => {
+      dataForDrawPolygon.isDraggingCircle = true
+      dataForDrawPolygon.draggingCircle = e.circle
+      e.circle.setFillColor('#ffcc00')
+    }, { circle: true })
+    const draggEvent = map.addListener('drag', e => {
+      if (dataForDrawPolygon.isDraggingCircle) {
+        map.setScrollGesturesEnabled(false)
+        const circle = dataForDrawPolygon.draggingCircle
+        const polygon = circle.belongTo
+        const path = polygon.getPaths()
+        circle.setCenter(e.location)
+        const index = polygon.hasManyCircles.findIndex(_circle => _circle === circle)
+
+        if(index === 0){
+          path[0][0] = e.location
+          path[0][path[0].length - 1] = e.location
+        } else {
+          path[0][index] = e.location
+        }
+
+        polygon.setPaths(path)
+        measure.setPath(path[0])
+        const area = Math.round(measure.area * 100) / 100
+        const center = measure.center
+        polygon.markerForArea.setPosition(center)
+        polygon.markerForArea.setIconView(`<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${area} m2</span>`)
+      }
+    })
+
+    const draggEndEvent = map.addListener('dragEnd', e => {
+      if(dataForDrawPolygon.isDraggingCircle){
+        map.setScrollGesturesEnabled(true)
+        dataForDrawPolygon.draggingCircle.setFillColor('#3085d6')
+        dataForDrawPolygon.isDraggingCircle = false
+        dataForDrawPolygon.draggingCircle = null
+      }
+    })
+
     return () => {
       event.remove()
+      longClickEvent.remove()
+      draggEvent.remove()
+      draggEndEvent.remove()
       mouseMoveEvent?.remove()
       dblClickEvent?.remove()
       dataForDrawPolygon.polygon.setMap(null)
       dataForDrawPolygon.circles.forEach(circle => circle.setMap(null))
+      savedObjects.forEach(object => object?.setMap(null))
     }
   }
 

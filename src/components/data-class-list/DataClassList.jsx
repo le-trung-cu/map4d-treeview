@@ -1,55 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-// import { v4 as uuid } from 'uuid'
 import { SearchOutlined, Folder, } from '@mui/icons-material'
 import { StyledInputBase, StyledSearchIconWrapper, StyledSearchForm, StyledTreeView } from './styled'
 import { TreeItem } from '../tree-view/TreeView'
 import { Checkbox, Divider, Typography } from '@mui/material'
 import { Stack } from '@mui/system'
 import { menuData } from '../../data/menu'
-
-// const initState = {
-//     treeView: [
-//         {
-//             id: uuid(),
-//             name: 'Hạ tầng giao thông',
-//             children: [
-//                 { id: uuid(), name: 'Ranh đất', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Quy hoạch 1778', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Tìm đường' },
-//                 { id: uuid(), name: 'Ranh đất', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Quy hoạch', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Lô đất 1', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Lô đất 2', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Bó vỉa', icon: 'turned_in_not' },
-//                 { id: uuid(), name: 'Hiện Trạng Công Viên Phần Mềm', icon: 'turned_in_not' },
-//             ]
-//         },
-//         {
-//             id: uuid(),
-//             name: 'Công viên cây xanh',
-//             children: [
-//                 { id: uuid(), name: 'Công viên 1' },
-//                 {
-//                     id: uuid(),
-//                     name: 'Công viên 2',
-//                     children: [
-//                         { id: uuid(), name: 'Quy hoạch', icon: 'turned_in_not' },
-//                         { id: uuid(), name: 'Lô đất 1', icon: 'turned_in_not' },
-//                         { id: uuid(), name: 'Lô đất 2', icon: 'turned_in_not' },
-//                         { id: uuid(), name: 'Bó vỉa', icon: 'turned_in_not' },
-//                     ]
-//                 },
-//                 { id: uuid(), name: 'Công viên 3' },
-//             ]
-//         },
-//         {
-//             id: uuid(), name: 'Công viên 1', children: [],
-//         },
-//         {
-//             id: uuid(), name: 'Công viên x',
-//         },
-//     ]
-// }
 
 function fetchMenuData() {
     return menuData.map(item => ({ ...item }))
