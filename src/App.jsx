@@ -10,6 +10,7 @@ import { styled } from '@mui/material/styles'
 import { useEffect, useRef, useState } from 'react'
 import { DataClassList } from './components/data-class-list/DataClassList'
 import { theme } from './theme'
+import polylabel from 'polylabel'
 
 const drawerWidth = 380;
 const mapEventOptions = {
@@ -78,6 +79,8 @@ function App() {
   const [open, setOpen] = useState(false)
 
   const [selectedAction, setSelectedAction] = useState(null)
+  const [selectedMapType, setSelectedMapType] = useState(null)
+
   const [map, setMap] = useState(null)
   const marker = useRef(null)
   const [markerPosition, setMarkerPosition] = useState(null)
@@ -350,12 +353,11 @@ function App() {
           if (points.length > 3) {
             measure.setPath(points)
             const area = Math.round(measure.area * 100) / 100
-            const center = measure.center
-
+            const center = polylabel([points.map(p => [p.lat, p.lng])], 2)
             dataForDrawPolygon.markerForAreaOfPolygon?.setMap(null)
             dataForDrawPolygon.markerForAreaOfPolygon = new window.map4d.Marker({
-              position: center,
-              anchor: [0, 0],
+              position:  {lat: center[0], lng: center[1]},
+              // anchor: [0, 0],
               iconView: `<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${area} m2</span>`,
             })
             dataForDrawPolygon.markerForAreaOfPolygon.setMap(map)
@@ -375,11 +377,6 @@ function App() {
           const points = dataForDrawPolygon.points.concat(dataForDrawPolygon.points[0])
           dataForDrawPolygon.polygon.setPaths([points])
           dataForDrawPolygon.points = []
-          measure.setPath(points)
-          setAreaOfPolygon(Math.round(measure.area * 100) / 100)
-
-          console.log(dataForDrawPolygon.polygon.getPaths());
-
           savedObjects.push(dataForDrawPolygon.polygon)
           savedObjects.push(...dataForDrawPolygon.circles)
           savedObjects.push(dataForDrawPolygon.markerForAreaOfPolygon)
@@ -388,6 +385,8 @@ function App() {
           dataForDrawPolygon.polygon.hasManyCircles = dataForDrawPolygon.circles
           dataForDrawPolygon.circles.forEach(circle => circle.belongTo = dataForDrawPolygon.polygon)
           dataForDrawPolygon.polygon.markerForArea = dataForDrawPolygon.markerForAreaOfPolygon
+
+          window.xpolygon = dataForDrawPolygon.polygon
 
           dataForDrawPolygon.polygon = new window.map4d.Polygon({
             fillOpacity: 0.1,
@@ -417,7 +416,7 @@ function App() {
         circle.setCenter(e.location)
         const index = polygon.hasManyCircles.findIndex(_circle => _circle === circle)
 
-        if(index === 0){
+        if (index === 0) {
           path[0][0] = e.location
           path[0][path[0].length - 1] = e.location
         } else {
@@ -427,14 +426,14 @@ function App() {
         polygon.setPaths(path)
         measure.setPath(path[0])
         const area = Math.round(measure.area * 100) / 100
-        const center = measure.center
-        polygon.markerForArea.setPosition(center)
+        const center = polylabel([path[0].map(p => [p.lat, p.lng])], 2.0)
+        polygon.markerForArea.setPosition({lat: center[0], lng: center[1]})
         polygon.markerForArea.setIconView(`<span style="color: red; text-stroke: 4px #ffffff; text-shadow: -1px 0px 0px #ffffff, 0px 0px 0px #ffffff, 1px 0px 0px #ffffff, 0px -1px 0px #ffffff, 0px 1px 0px #ffffff; text-align: center;">${area} m2</span>`)
       }
     })
 
     const draggEndEvent = map.addListener('dragEnd', e => {
-      if(dataForDrawPolygon.isDraggingCircle){
+      if (dataForDrawPolygon.isDraggingCircle) {
         map.setScrollGesturesEnabled(true)
         dataForDrawPolygon.draggingCircle.setFillColor('#3085d6')
         dataForDrawPolygon.isDraggingCircle = false
@@ -465,6 +464,10 @@ function App() {
       return subscribeGetAreaOfPolygon()
 
   }, [map, selectedAction])
+
+  useEffect(() => {
+    map?.setMapType(selectedMapType || 'roadmap')
+  }, [map, selectedMapType])
 
   const onMapReady = (map, id) => {
     window.map = map
@@ -510,6 +513,13 @@ function App() {
               </ToggleButton>
               <ToggleButton value={4}><SelectAllRoundedIcon /></ToggleButton>
             </ToggleButtonGroup>
+            <ToggleButtonGroup sx={{marginLeft: 2}} color='standard' variant="text" aria-label="text button group"
+              value={selectedMapType}
+              exclusive
+              onChange={(e, type) => { setSelectedMapType(type) }}>
+              <ToggleButton value='roadmap'>ROADMAP</ToggleButton>
+              <ToggleButton value='map3d'>MAP3D</ToggleButton>
+            </ToggleButtonGroup>
           </Toolbar>
         </AppBar>
         <Drawer
@@ -532,7 +542,7 @@ function App() {
           <DataClassList />
         </Drawer>
         <Box sx={{ marginLeft: open ? drawerWidth + 10 + 'px' : 0, position: 'relative', mt: 12, bgcolor: 'red' }}>
-          <Box sx={{
+          {selectedAction === 2 && <Box sx={{
             position: 'absolute',
             display: 'flex',
             flexDirection: 'column',
@@ -546,17 +556,10 @@ function App() {
             bgcolor: 'white',
             zIndex: 10,
           }}>
-            {selectedAction === 2 && <>
-              <div>lat: {markerPosition?.lat}</div>
-              <div>lng: {markerPosition?.lng}</div>
-            </>}
-            {selectedAction === 3 && <>
-              <div>length: {lengthOfPolyline}</div>
-            </>}
-            {selectedAction === 4 && <>
-              <div>area: {areaOfPolygon}</div>
-            </>}
+            <div>lat: {markerPosition?.lat}</div>
+            <div>lng: {markerPosition?.lng}</div>
           </Box>
+          }
           <Map4dMap
             key="map4d"
             id="map4d"
